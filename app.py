@@ -3,7 +3,6 @@ from PIL import Image
 import requests
 import io
 import base64
-from datetime import datetime
 
 st.set_page_config(
     page_title="Grok ICT Institutional Audit Pro",
@@ -11,98 +10,82 @@ st.set_page_config(
     layout="wide"
 )
 
-st.markdown("""
-<style>
-    .stApp { background-color: #0B0F19; color: white; }
-    .result-box {
-        background: #131722; 
-        border-left: 5px solid #00ff9d;
-        border-radius: 12px; 
-        padding: 25px; 
-        margin: 15px 0;
-    }
-    .signal-buy { background: #0d2b1a; color: #00ff9d; padding: 18px; border-radius: 10px; font-size: 1.3rem; text-align: center; font-weight: bold; }
-    .signal-sell { background: #2b0d0d; color: #ff4d4d; padding: 18px; border-radius: 10px; font-size: 1.3rem; text-align: center; font-weight: bold; }
-</style>
-""", unsafe_allow_html=True)
-
 st.title("🏛️ Grok ICT Institutional Audit Pro")
 st.caption("Powered by Grok (xAI) • Smart Money Concept & ICT Methodology")
-st.markdown("---")
 
 with st.sidebar:
-    st.header("🔑 Settings")
-    xai_api_key = st.text_input("xAI API Key", type="password", value="")
+    st.header("Settings")
+    api_key = st.text_input("xAI API Key", type="password")
     pair = st.text_input("Pair", value="XAUUSD")
-    tf = st.selectbox("Timeframe", ["M15", "H1", "H4", "D1", "W1"])
-    mode = st.selectbox("Mode Analisa", [
-        "Full Institutional Audit",
-        "Entry Setup Presisi",
-        "Market Structure + Bias",
-        "Liquidity & Order Block"
-    ])
+    tf = st.selectbox("Timeframe", ["M5", "M15", "H1", "H4", "D1"])
+    mode = st.selectbox("Mode Analisa", ["Full Institutional Audit", "Entry Setup"])
 
-uploaded_files = st.file_uploader("📸 Upload Chart Screenshot", 
+uploaded_files = st.file_uploader("Upload Chart Screenshot", 
                                  type=["png", "jpg", "jpeg"], 
                                  accept_multiple_files=True)
 
 if uploaded_files:
     for file in uploaded_files:
-        st.image(Image.open(file), caption=file.name, use_column_width=True)
+        st.image(file, use_column_width=True)
 
-    if st.button("🚀 Analisa dengan Grok", type="primary", use_container_width=True):
-        if not xai_api_key:
-            st.error("❌ Masukkan xAI API Key di sidebar!")
+    if st.button("🚀 Analisa dengan Grok", type="primary"):
+        if not api_key:
+            st.error("Masukkan xAI API Key!")
             st.stop()
 
         with st.spinner("Grok sedang menganalisa chart..."):
             try:
-                images_data = []
+                # Prepare image
+                images = []
                 for file in uploaded_files:
                     img = Image.open(file)
                     buf = io.BytesIO()
-                    img.save(buf, format="JPEG", quality=85)
-                    img_bytes = buf.getvalue()
-                    images_data.append(base64.b64encode(img_bytes).decode())
+                    img.save(buf, format="JPEG")
+                    b64 = base64.b64encode(buf.getvalue()).decode()
+                    images.append(b64)
 
-                prompt = f"""Anda adalah Grok ICT Institutional Auditor Pro.
-Analisis chart ini menggunakan Smart Money Concept dan ICT Methodology secara mendalam.
+                prompt = f"""Kamu adalah Grok ICT Institutional Auditor Pro.
+Analisa chart berikut menggunakan ICT dan Smart Money Concept.
 
-Pair: {pair} | Timeframe: {tf} | Mode: {mode}
+Pair: {pair}
+Timeframe: {tf}
+Mode: {mode}
 
-Berikan analisa dalam Bahasa Indonesia dengan struktur:
-1. Market Structure
-2. Bias Saat Ini
-3. Key Levels (OB, FVG, Liquidity)
-4. Trading Setup (Entry, SL, TP)
-5. Risk Management
-6. Kesimpulan"""
+Berikan analisa lengkap dalam Bahasa Indonesia:
+- Market Structure
+- Bias
+- Key Levels (Order Block, FVG, Liquidity)
+- Trading Setup
+- Risk Management"""
 
                 url = "https://api.x.ai/v1/chat/completions"
                 headers = {
-                    "Authorization": f"Bearer {xai_api_key}",
+                    "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json"
                 }
 
                 content = [{"type": "text", "text": prompt}]
-                for b64 in images_data:
-                    content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+                for img_b64 in images:
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}
+                    })
 
-                payload = {
-                    "model": "grok-2-vision-latest",
+                data = {
+                    "model": "grok-2-vision-1212",   # Model yang lebih stabil
                     "messages": [{"role": "user", "content": content}],
-                    "max_tokens": 1800,
+                    "max_tokens": 1500,
                     "temperature": 0.7
                 }
 
-                response = requests.post(url, headers=headers, json=payload)
-
+                response = requests.post(url, headers=headers, json=data, timeout=60)
+                
                 if response.status_code == 200:
                     result = response.json()["choices"][0]["message"]["content"]
-                    st.success("✅ Analisa Selesai!")
-                    st.markdown(f'<div class="result-box">{result}</div>', unsafe_allow_html=True)
+                    st.success("✅ Analisa Selesai")
+                    st.markdown(result)
                 else:
-                    st.error(f"Error: {response.status_code}")
+                    st.error(f"Error {response.status_code}: {response.text}")
 
             except Exception as e:
                 st.error(f"Terjadi kesalahan: {str(e)}")
